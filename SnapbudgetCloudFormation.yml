@@ -404,7 +404,7 @@ Resources:
         sudo pip3 install DateTime
         sudo pip3 install matplotlib
 
-        sudo git clone https://Hargun-Chhabra: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@github.com/Hargun-Chhabra/termassignent.git
+        sudo git clone https://gitaccesstoken@github.com/Hargun-Chhabra/termassignent.git
         cd termassignent
 
         gunicorn3 app:app 
