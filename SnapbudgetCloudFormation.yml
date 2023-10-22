@@ -1,0 +1,444 @@
+
+# Creating filexiste csv
+Resources:
+  CheckLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: testfunctioncsvcheckfinal
+      Handler: index.handler
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+
+          def handler(event, context):
+          # TODO implement
+            s3 = boto3.client('s3')
+            bool=False;
+            bucket_name='hargunassignment2bucket'
+            object_key=event['path']
+            try:
+              s3.head_object(Bucket=bucket_name, Key=object_key)
+              bool=True
+              print(f"The file {object_key} exists in {bucket_name}")
+            except Exception as e:
+              print(e)
+              print(f"The file {object_key} does not exist in {bucket_name}")
+
+            return {
+              'statusCode': 200,
+              'body': bool
+            }
+      Runtime: python3.9
+
+  # MyApiGateway:
+  CheckApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: My Api Gateway1
+      # EndpointConfiguration:
+        # Types:
+        #   - REGIONAL
+    DependsOn:
+      # - MyLambdaFunction
+      - CheckLambdaFunction
+  # MyApiGatewayResource:
+  CheckApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      # RestApiId: !Ref MyApiGateway
+      RestApiId: !Ref CheckApiGateway
+
+      # ParentId: !GetAtt MyApiGateway.RootResourceId
+      ParentId: !GetAtt CheckApiGateway.RootResourceId
+      PathPart: my-resource
+    DependsOn:
+      # - MyApiGateway
+      - CheckApiGateway
+
+  # MyApiGatewayMethod:
+  CheckApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      # RestApiId: !Ref MyApiGateway
+      RestApiId: !Ref CheckApiGateway
+      # ResourceId: !Ref MyApiGatewayResource
+      ResourceId: !Ref CheckApiGatewayResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CheckLambdaFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: "'*'"
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+          ResponseModels:
+            application/json: "Empty"
+    DependsOn:
+      # - MyApiGatewayResource
+      - CheckApiGatewayResource
+
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt CheckLambdaFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CheckApiGateway}/*/*/*"
+        
+  MyApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      # - MyApiGatewayMethod
+      - CheckApiGatewayMethod
+    Properties:
+      # RestApiId: !Ref MyApiGateway
+      RestApiId: !Ref CheckApiGateway
+      StageName: test
+    DependsOn:
+      # - MyApiGatewayMethod
+      - CheckApiGatewayMethod
+
+
+# Image Upload Function
+  MyLambdaFunction2:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: testfunctionuploadcheck
+      Handler: index.handler
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import base64
+
+          def handler(event, context):
+          # TODO implement
+            val=json.loads(event['body'])
+            s3 = boto3.client('s3',region_name='us-east-1')
+            img=val['encoded'].encode('utf-8')
+            # print(event['email']) 
+  
+            BUCKET_NAME = 'hargunassignment2bucket'
+            OBJECT_NAME = val['email']+'/'+val['filename']
+  
+  
+  
+  
+            s3.put_object(Body=base64.b64decode(img), Bucket=BUCKET_NAME, Key=OBJECT_NAME)
+  
+            return {
+            'statusCode': 200,
+            'body': val['email']+'/'+val['filename']
+  
+            }
+
+      Runtime: python3.9
+
+  MyApiGateway2:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: My API Gateway2
+      # EndpointConfiguration:
+        # Types:
+        #   - REGIONAL
+    DependsOn:
+      - MyLambdaFunction2
+
+  MyApiGatewayResource2:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref MyApiGateway2
+      ParentId: !GetAtt MyApiGateway2.RootResourceId
+      PathPart: my-resource
+    DependsOn:
+      - MyApiGateway2
+
+  MyApiGatewayMethod2:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref MyApiGateway2
+      ResourceId: !Ref MyApiGatewayResource2
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MyLambdaFunction2.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: "'*'"
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+          ResponseModels:
+            application/json: "Empty"
+    DependsOn:
+      - MyApiGatewayResource2
+
+  LambdaPermission2:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt MyLambdaFunction2.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyApiGateway2}/*/*/*"
+        
+  MyApiGatewayDeployment2:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - MyApiGatewayMethod2
+    Properties:
+      RestApiId: !Ref MyApiGateway2
+      StageName: test
+    DependsOn:
+      - MyApiGatewayMethod2
+
+
+ #labda 3
+
+  MyLambdaFunction3:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: testfunctiontoextractcomb
+      Handler: index.handler
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          from trp import Document
+
+          def handler(event, context):
+          # TODO implement
+            diction={}
+            total_keys = ['total', 'Total', 'TOTAL', 'Total Amount', 'TOTAL AMOUNT']
+    
+            # S3 Bucket Data
+            BUCKET_NAME = 'hargunassignment2bucket'
+            OBJECT_NAME = event['path']
+            print(OBJECT_NAME)
+            s3 = boto3.client('s3')
+            # Amazon Textract client
+            textractmodule = boto3.client('textract')
+
+            # #2. FORM detection from documents:
+            response = textractmodule.analyze_document(
+              Document={
+              'S3Object': {
+                'Bucket': BUCKET_NAME,
+                'Name': OBJECT_NAME 
+              }
+              },
+            FeatureTypes=["FORMS"])
+            doc = Document(response)
+    
+            for page in doc.pages:
+            # diction.update(page.form.key_value_pairs)
+              for field in page.form.fields:
+                diction[str(field.key)] = str(field.value)
+    
+            s3.delete_object(Bucket=BUCKET_NAME,Key=OBJECT_NAME)   
+    
+            total_value = None
+            for key in total_keys:
+              if key in diction.keys():
+                total_value = diction[key]
+                break
+    
+    
+              return {
+              'statusCode': 200,
+              'body': str(total_value)
+            }
+
+      Timeout: 10
+      Runtime: python3.9
+      Layers:
+        - arn:aws:lambda:us-east-1:617632631846:layer:texex:1
+
+  MyApiGateway3:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: My API Gateway3
+      # EndpointConfiguration:
+        # Types:
+        #   - REGIONAL
+    DependsOn:
+      - MyLambdaFunction3
+
+  MyApiGatewayResource3:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref MyApiGateway3
+      ParentId: !GetAtt MyApiGateway3.RootResourceId
+      PathPart: my-resource
+    DependsOn:
+      - MyApiGateway3
+
+  MyApiGatewayMethod3:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref MyApiGateway3
+      ResourceId: !Ref MyApiGatewayResource3
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MyLambdaFunction3.Arn}/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: "'*'"
+            method.response.header.Access-Control-Allow-Origin: "'*'"
+          ResponseModels:
+            application/json: "Empty"
+    DependsOn:
+      - MyApiGatewayResource3
+
+
+  LambdaPermission3:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt MyLambdaFunction3.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyApiGateway3}/*/*/*"
+        
+  MyApiGatewayDeployment3:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - MyApiGatewayMethod3
+    Properties:
+      RestApiId: !Ref MyApiGateway3
+      StageName: test
+    DependsOn:
+      - MyApiGatewayMethod3
+
+
+  MyUserPool:
+    Type: "AWS::Cognito::UserPool"
+    Properties:
+      UserPoolName: "my-user-pool3"
+      AutoVerifiedAttributes:
+        - "email"
+      UsernameAttributes:
+        - "email"
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      VerificationMessageTemplate:
+        EmailMessage: 'Your verification code is {####}.'
+        EmailSubject: 'Your verification code'
+        # SmsMessage: 'Your verification code is {####}.'
+      EmailVerificationMessage: 'Please use the following code to verify your email ({email}): {####}'
+      # SmsVerificationMessage: 'Please use the following code to verify your phone number: {####}'
+      EmailConfiguration:
+        EmailSendingAccount: COGNITO_DEFAULT
+  MyUserPoolClient:
+    Type: "AWS::Cognito::UserPoolClient"
+    Properties:
+      ClientName: "my-user-pool-client"
+      UserPoolId: !Ref MyUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - "USER_PASSWORD_AUTH"
+  MyIdentityPool:
+    Type: "AWS::Cognito::IdentityPool"
+    Properties:
+      IdentityPoolName: "my-identity-pool"
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref MyUserPoolClient
+          ProviderName: !GetAtt MyUserPool.ProviderName
+
+
+  MyS3Bucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: "harguntermassignment"
+      AccessControl: "PublicRead"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+
+ 
+  MyInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: ami-007855ac798b5175e # Replace with your desired AMI ID
+      InstanceType: t2.medium # Replace with your desired instance type
+      KeyName: termassignmentkeypair # Replace with your desired key pair name
+      SecurityGroups:
+        - Ref: MySecurityGroup
+      Tags:
+        - Key: Name
+          Value: ec2test13 # Replace with your desired instance name
+      UserData: !Base64 |
+        #!/bin/bash
+        sudo apt-get update
+        sudo apt-get -y install python3
+        sudo apt-get -y install python3-pip
+
+        sudo pip3 install flask
+        sudo pip3 install boto3
+        sudo pip3 install requests
+        sudo pip3 install cognitojwt
+        sudo pip3 install pytz
+        sudo pip3 install numpy
+        sudo pip3 install pandas
+        sudo pip3 install DateTime
+        sudo pip3 install matplotlib
+
+        sudo git clone https://Hargun-Chhabra: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@github.com/Hargun-Chhabra/termassignent.git
+        cd termassignent
+
+        gunicorn3 app:app 
+
+        sudo apt-get install -y nginx
+        sudo apt-get install -y gunicorn3
+
+        PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+        echo "server {listen 80;server_name $PUBLIC_IP;location / {proxy_pass http://127.0.0.1:8000;}}" | sudo tee /etc/nginx/sites-available/flaskapp > /dev/null
+        sudo ln -s /etc/nginx/sites-available/flaskapp /etc/nginx/sites-enabled/flaskapp
+        
+        sudo service nginx restart
+
+        
+
+  MySecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Allow SSH and HTTP/HTTPS access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+
+
+
+
